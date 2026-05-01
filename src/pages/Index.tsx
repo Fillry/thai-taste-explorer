@@ -5,7 +5,6 @@ import { OnboardingScreen } from "@/components/screens/OnboardingScreen";
 import { PlanScreen } from "@/components/screens/PlanScreen";
 import { DiscoverScreen } from "@/components/screens/DiscoverScreen";
 import { LensScreen } from "@/components/screens/LensScreen";
-import { PassportScreen } from "@/components/screens/PassportScreen";
 import { ProfileScreen } from "@/components/screens/ProfileScreen";
 import { CommunityScreen } from "@/components/screens/CommunityScreen";
 
@@ -19,7 +18,6 @@ const Index = () => {
       case "discover": return <DiscoverScreen />;
       case "lens": return <LensScreen />;
       case "community": return <CommunityScreen />;
-      case "passport": return <PassportScreen />;
       case "profile": return <ProfileScreen onEditProfile={() => setOnboarded(false)} />;
     }
   };

@@ -145,6 +145,7 @@ export const LensScreen = () => {
     setShowResult(false);
     setTimeout(() => {
       setAnalysis(null);
+      setMenuAnalysis(null);
       setPreviewUrl(null);
     }, 300);
   };
@@ -279,30 +280,12 @@ export const LensScreen = () => {
             onRetry={triggerUpload}
           />
         ) : (
-          <div>
-            <div className="flex items-center gap-2 rounded-xl bg-secondary/10 px-3 py-2">
-              <Languages className="h-4 w-4 text-secondary" />
-              <p className="text-xs font-semibold text-secondary">3 dishes detected · TH → EN</p>
-            </div>
-            <ul className="mt-4 space-y-3">
-              {menuResult.map((m, i) => (
-                <li key={i} className="flex gap-3 rounded-2xl bg-muted/50 p-3">
-                  <img
-                    src={`https://images.unsplash.com/photo-${
-                      ["1569718212165-3a8278d5f624", "1455619452474-d2be8b1e70cd", "1626804475297-41608ea09aeb"][i]
-                    }?w=200&q=80`}
-                    alt=""
-                    className="h-16 w-16 rounded-xl object-cover"
-                  />
-                  <div className="flex-1">
-                    <p className="text-xs text-muted-foreground">{m.thai}</p>
-                    <h4 className="text-sm font-bold text-foreground">{m.eng}</h4>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{m.desc}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <MenuResultView
+            scanning={scanning}
+            analysis={menuAnalysis}
+            previewUrl={previewUrl}
+            onRetry={triggerUpload}
+          />
         )}
       </BottomSheet>
     </div>

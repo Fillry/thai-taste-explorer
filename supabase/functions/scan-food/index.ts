@@ -3,48 +3,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
-
-async function authenticate(req: Request): Promise<boolean> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return false;
-  const token = authHeader.slice(7);
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
-    });
-    if (!res.ok) return false;
-    const user = await res.json();
-    return !!user?.id;
-  } catch {
-    return false;
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    if (!(await authenticate(req))) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const { imageDataUrl } = await req.json();
     if (!imageDataUrl || typeof imageDataUrl !== "string") {
       return new Response(JSON.stringify({ error: "imageDataUrl is required" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (imageDataUrl.length > MAX_PAYLOAD_BYTES) {
-      return new Response(JSON.stringify({ error: "Image too large" }), {
-        status: 413,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -156,7 +122,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("scan-food error:", e);
     return new Response(
-      JSON.stringify({ error: "An internal error occurred. Please try again." }),
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

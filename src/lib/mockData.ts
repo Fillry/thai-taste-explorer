@@ -251,6 +251,97 @@ export const mockQuests: Quest[] = [
   },
 ];
 
+export interface Restaurant {
+  id: string;
+  name: string;
+  area: string;
+}
+
+export const mockRestaurants: Restaurant[] = [
+  { id: "r1", name: "Baan Rim Klong", area: "Nonthaburi" },
+  { id: "r2", name: "Krua Apsorn", area: "Bangkok – Dinso Rd." },
+  { id: "r3", name: "Jay Fai", area: "Bangkok – Phra Nakhon" },
+  { id: "r4", name: "Khao Soi Khun Yai", area: "Chiang Mai" },
+  { id: "r5", name: "Raan Jay Oh", area: "Bangkok – Banthat Thong" },
+  { id: "r6", name: "Hong Tauw Inn", area: "Chiang Mai" },
+];
+
+export interface CommunityReview {
+  id: string;
+  restaurantId: string;
+  restaurantName: string;
+  dishName: string;
+  author: string;
+  authorAvatar: string;
+  image: string;
+  description: string;
+  spicy: number;       // 0-5
+  sweetness: number;   // 0-5
+  hygiene: number;     // 0-5
+  tourismFriendly: number; // 0-5
+  rating: number;      // 1-5 stars
+  likes: number;
+  liked: boolean;
+  createdAt: string;   // relative time string
+}
+
+export const mockReviews: CommunityReview[] = [
+  {
+    id: "rev1",
+    restaurantId: "r1",
+    restaurantName: "Baan Rim Klong",
+    dishName: "Miang Kham",
+    author: "Nicha",
+    authorAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&q=80",
+    image: "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=900&q=80",
+    description: "The owner explained every leaf-wrap ingredient in Thai and English. The sauce was sweet, herbal, and slightly salty. Great for learning old-style Thai snacks — peanut allergy travelers should ask first.",
+    spicy: 2,
+    sweetness: 4,
+    hygiene: 5,
+    tourismFriendly: 4,
+    rating: 5,
+    likes: 42,
+    liked: false,
+    createdAt: "2h ago",
+  },
+  {
+    id: "rev2",
+    restaurantId: "r4",
+    restaurantName: "Khao Soi Khun Yai",
+    dishName: "Khao Soi Gai",
+    author: "Marco",
+    authorAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&q=80",
+    image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=900&q=80",
+    description: "Closes by 2pm — go early! Crispy noodles on top, broth was rich and not too spicy. Locals fill the place, only a few tourists.",
+    spicy: 3,
+    sweetness: 2,
+    hygiene: 4,
+    tourismFriendly: 3,
+    rating: 5,
+    likes: 88,
+    liked: true,
+    createdAt: "Yesterday",
+  },
+  {
+    id: "rev3",
+    restaurantId: "r3",
+    restaurantName: "Jay Fai",
+    dishName: "Crab Omelette",
+    author: "Aiko",
+    authorAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=120&q=80",
+    image: "https://images.unsplash.com/photo-1626804475297-41608ea09aeb?w=900&q=80",
+    description: "Iconic but expect 2-hour wait. Generous crab, crispy edges. Worth it once — bring cash.",
+    spicy: 1,
+    sweetness: 2,
+    hygiene: 4,
+    tourismFriendly: 5,
+    rating: 4,
+    likes: 156,
+    liked: false,
+    createdAt: "3d ago",
+  },
+];
+
 export const mockBadges: Badge[] = [
   { id: "b1", name: "First Bite", emoji: "🍜", unlocked: true, description: "Logged your first dish" },
   { id: "b2", name: "Curry King", emoji: "🍛", unlocked: true, description: "Tried 3 different curries" },

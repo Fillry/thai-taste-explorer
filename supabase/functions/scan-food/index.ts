@@ -88,14 +88,12 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Typhoon API error:", response.status, errText);
+      console.error("AI gateway error:", response.status, errText);
       const friendly =
         response.status === 429
           ? "ส่งคำขอถี่เกินไป กรุณาลองใหม่อีกสักครู่"
-          : response.status === 401
-          ? "Typhoon API key ไม่ถูกต้องหรือหมดอายุ"
           : response.status === 402
-          ? "Typhoon credit หมด กรุณาเติมที่ playground.opentyphoon.ai"
+          ? "AI credit หมด กรุณาเติมที่ Settings → Workspace → Usage"
           : "วิเคราะห์รูปไม่สำเร็จ กรุณาลองใหม่";
       return new Response(JSON.stringify({ error: friendly }), {
         status: response.status,

@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
-import { Camera, FileText, Zap, AlertTriangle, Leaf, Languages } from "lucide-react";
+import { Camera, FileText, Zap, AlertTriangle, Leaf, Languages, Sparkles } from "lucide-react";
 import { BottomSheet } from "@/components/BottomSheet";
 
 type Mode = "food" | "menu";
@@ -148,7 +148,7 @@ export const LensScreen = () => {
         {mode === "food" ? (
           <div>
             <div className="flex items-center gap-2 rounded-xl bg-secondary/10 px-3 py-2">
-              <Sparkles_local /> 
+              <Sparkles className="h-4 w-4 text-secondary" />
               <p className="text-xs font-semibold text-secondary">
                 {foodResult.confidence}% identified
               </p>
@@ -220,6 +220,3 @@ export const LensScreen = () => {
   );
 };
 
-// tiny helper to avoid import collision in same file
-import { Sparkles } from "lucide-react";
-const Sparkles_local = () => <Sparkles className="h-4 w-4 text-secondary" />;

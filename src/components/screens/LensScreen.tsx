@@ -235,7 +235,7 @@ export const LensScreen = () => {
             backgroundImage: previewUrl
               ? `url(${previewUrl})`
               : mode === "menu"
-                ? "url(https://images.unsplash.com/photo-1574936145840-28808d77a0b6?w=900&q=80)"
+                ? "url(https://img1.pic.in.th/images/c8575032-fcdd-4d91-b20e-780643935db8.png)"
                 : "url(https://images.unsplash.com/photo-1559314809-0d155014e29e?w=900&q=80)",
           }}
         />

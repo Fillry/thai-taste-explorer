@@ -3,6 +3,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const TYPHOON_ENDPOINT = "https://api.opentyphoon.ai/v1/chat/completions";
+const TYPHOON_MODEL = "typhoon-v2-vision";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -15,36 +18,44 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+    const TYPHOON_API_KEY = Deno.env.get("TYPHOON_API_KEY");
+    if (!TYPHOON_API_KEY) {
+      return new Response(JSON.stringify({ error: "TYPHOON_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const systemPrompt = `You are an expert OCR + Thai food translator. The user uploads a photo of a restaurant menu (often in Thai). Read every legible dish entry and call return_menu_analysis with the structured list.
+    const systemPrompt = `คุณคือผู้เชี่ยวชาญด้าน OCR และล่ามอาหารไทย ผู้ใช้ส่งรูปเมนูร้านอาหาร (ส่วนใหญ่เป็นภาษาไทย) มาให้
+อ่านทุกรายการอาหารที่อ่านออก แล้วเรียก tool return_menu_analysis พร้อมข้อมูลแบบ structured
 
-Rules:
-- Extract up to 20 dishes max. Skip section headers, drinks-only sections if not dishes, and prices.
-- For each dish provide: original text exactly as printed (originalText), englishName (concise), thaiName if present, a one-sentence English description, an estimated price if visible (priceText, e.g. "120฿") else empty string, spicinessLevel 0-5, and 2-4 short tags (e.g. "spicy","seafood","vegetarian","noodles","soup","grilled","rice","dessert").
-- Also produce imageQuery: 2-4 simple English words optimized for an Unsplash photo search of that dish (e.g. "tom yum soup", "pad thai noodles").
-- If image is not a menu or unreadable, set unclear=true and return empty dishes array.`;
+กฎ:
+- ดึงเมนูได้สูงสุด 20 รายการ ข้ามหัวข้อหมวดหมู่ และเครื่องดื่มที่ไม่ใช่อาหารจานหลัก
+- แต่ละรายการต้องมี:
+  - originalText: ข้อความต้นฉบับตามที่พิมพ์บนเมนู
+  - englishName: ชื่ออังกฤษกระชับ
+  - thaiName: ชื่อไทย (ถ้ามี)
+  - description: คำอธิบายภาษาอังกฤษ 1 ประโยค
+  - priceText: ราคา (เช่น "120฿") หรือ string ว่างถ้าไม่เห็น
+  - spicinessLevel: 0-5
+  - tags: 2-4 คำ (เช่น "spicy","seafood","vegetarian","noodles","soup","grilled","rice","dessert")
+  - imageQuery: 2-4 คำภาษาอังกฤษเหมาะกับค้นรูปบน Unsplash (เช่น "tom yum soup", "pad thai noodles")
+- ถ้ารูปไม่ใช่เมนู หรืออ่านไม่ออกเลย ให้ตั้ง unclear=true และส่ง dishes เป็น array ว่าง`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(TYPHOON_ENDPOINT, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${TYPHOON_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: TYPHOON_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           {
             role: "user",
             content: [
-              { type: "text", text: "Read this menu and return the structured analysis." },
+              { type: "text", text: "อ่านเมนูในรูปนี้แล้วส่งผลวิเคราะห์แบบ structured" },
               { type: "image_url", image_url: { url: imageDataUrl } },
             ],
           },
@@ -86,18 +97,22 @@ Rules:
           },
         ],
         tool_choice: { type: "function", function: { name: "return_menu_analysis" } },
+        max_tokens: 4096,
+        temperature: 0.2,
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("AI gateway error:", response.status, errText);
+      console.error("Typhoon API error:", response.status, errText);
       const friendly =
         response.status === 429
-          ? "Too many requests, please try again in a moment."
+          ? "ส่งคำขอถี่เกินไป กรุณาลองใหม่อีกสักครู่"
+          : response.status === 401
+          ? "Typhoon API key ไม่ถูกต้องหรือหมดอายุ"
           : response.status === 402
-          ? "AI credits exhausted. Add funds in Settings → Workspace → Usage."
-          : "Failed to analyze menu image.";
+          ? "Typhoon credit หมด กรุณาเติมที่ playground.opentyphoon.ai"
+          : "วิเคราะห์เมนูไม่สำเร็จ กรุณาลองใหม่";
       return new Response(JSON.stringify({ error: friendly }), {
         status: response.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -108,7 +123,7 @@ Rules:
     const argsStr = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
     if (!argsStr) {
       console.error("No tool call:", JSON.stringify(data));
-      return new Response(JSON.stringify({ error: "Could not parse AI response. Try a clearer photo." }), {
+      return new Response(JSON.stringify({ error: "ไม่สามารถอ่านผลลัพธ์ AI ได้ กรุณาลองรูปที่ชัดกว่านี้" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -118,7 +133,7 @@ Rules:
     try {
       parsed = JSON.parse(argsStr);
     } catch {
-      return new Response(JSON.stringify({ error: "Could not parse AI response. Try a clearer photo." }), {
+      return new Response(JSON.stringify({ error: "ไม่สามารถอ่านผลลัพธ์ AI ได้ กรุณาลองรูปที่ชัดกว่านี้" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -126,7 +141,7 @@ Rules:
 
     if (parsed?.unclear || !Array.isArray(parsed?.dishes) || parsed.dishes.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Couldn't read menu. Try a clearer, well-lit photo." }),
+        JSON.stringify({ error: "อ่านเมนูไม่ออก กรุณาถ่ายใหม่ให้ชัดและมีแสงเพียงพอ" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

@@ -3,6 +3,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const TYPHOON_ENDPOINT = "https://api.opentyphoon.ai/v1/chat/completions";
+const TYPHOON_MODEL = "typhoon-v2-vision";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -15,30 +18,39 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+    const TYPHOON_API_KEY = Deno.env.get("TYPHOON_API_KEY");
+    if (!TYPHOON_API_KEY) {
+      return new Response(JSON.stringify({ error: "TYPHOON_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const systemPrompt = `You are a Thai food expert. Analyze the dish in the image and call the return_dish_analysis tool with the structured data. If the image is unclear or not food, set "unclear" to true.`;
+    const systemPrompt = `คุณคือผู้เชี่ยวชาญด้านอาหารไทย วิเคราะห์รูปอาหารที่ผู้ใช้ส่งมา แล้วเรียกใช้ tool ชื่อ return_dish_analysis พร้อมข้อมูลที่ครบถ้วน
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+กฎ:
+- ถ้ารูปไม่ชัด, ไม่ใช่อาหาร, หรือไม่สามารถระบุได้ ให้ตั้ง unclear=true
+- dishName เป็นภาษาอังกฤษ, thaiName เป็นภาษาไทย
+- estimatedCalories เป็นตัวเลขประมาณการ (kcal ต่อจาน)
+- spicinessLevel เป็นจำนวนเต็ม 1-5 (1=ไม่เผ็ด, 5=เผ็ดมาก)
+- allergens และ ingredients เป็นภาษาอังกฤษ
+- description เป็นภาษาอังกฤษหนึ่งประโยคสั้นๆ
+- confidence 0-100 ตามความมั่นใจในการระบุชนิดอาหาร`;
+
+    const response = await fetch(TYPHOON_ENDPOINT, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${TYPHOON_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: TYPHOON_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           {
             role: "user",
             content: [
-              { type: "text", text: "Identify this Thai dish and return structured analysis." },
+              { type: "text", text: "ระบุอาหารไทยในรูปนี้และส่งคืนผลวิเคราะห์แบบ structured" },
               { type: "image_url", image_url: { url: imageDataUrl } },
             ],
           },
@@ -60,7 +72,7 @@ Deno.serve(async (req) => {
                   allergens: { type: "array", items: { type: "string" } },
                   ingredients: { type: "array", items: { type: "string" } },
                   confidence: { type: "number", description: "0-100" },
-                  description: { type: "string", description: "One short sentence" },
+                  description: { type: "string", description: "One short sentence in English" },
                 },
                 required: ["unclear", "dishName", "estimatedCalories", "spicinessLevel", "allergens", "ingredients", "description"],
                 additionalProperties: false,
@@ -69,18 +81,22 @@ Deno.serve(async (req) => {
           },
         ],
         tool_choice: { type: "function", function: { name: "return_dish_analysis" } },
+        max_tokens: 1024,
+        temperature: 0.2,
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("AI gateway error:", response.status, errText);
+      console.error("Typhoon API error:", response.status, errText);
       const friendly =
         response.status === 429
-          ? "Too many requests, please try again in a moment."
+          ? "ส่งคำขอถี่เกินไป กรุณาลองใหม่อีกสักครู่"
+          : response.status === 401
+          ? "Typhoon API key ไม่ถูกต้องหรือหมดอายุ"
           : response.status === 402
-          ? "AI credits exhausted. Add funds in Settings → Workspace → Usage."
-          : "Failed to analyze image.";
+          ? "Typhoon credit หมด กรุณาเติมที่ playground.opentyphoon.ai"
+          : "วิเคราะห์รูปไม่สำเร็จ กรุณาลองใหม่";
       return new Response(JSON.stringify({ error: friendly }), {
         status: response.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -94,7 +110,7 @@ Deno.serve(async (req) => {
     if (!argsStr) {
       console.error("No tool call in response:", JSON.stringify(data));
       return new Response(
-        JSON.stringify({ error: "Could not parse AI response. Try a clearer photo." }),
+        JSON.stringify({ error: "ไม่สามารถอ่านผลลัพธ์ AI ได้ กรุณาลองรูปที่ชัดกว่านี้" }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -104,14 +120,14 @@ Deno.serve(async (req) => {
       parsed = JSON.parse(argsStr);
     } catch {
       return new Response(
-        JSON.stringify({ error: "Could not parse AI response. Try a clearer photo." }),
+        JSON.stringify({ error: "ไม่สามารถอ่านผลลัพธ์ AI ได้ กรุณาลองรูปที่ชัดกว่านี้" }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     if (parsed?.unclear) {
       return new Response(
-        JSON.stringify({ error: "Image is unclear or not a recognizable dish. Try again." }),
+        JSON.stringify({ error: "รูปไม่ชัดหรือไม่ใช่อาหาร กรุณาลองใหม่" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

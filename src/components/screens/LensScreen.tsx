@@ -51,6 +51,7 @@ export const LensScreen = () => {
   const [showResult, setShowResult] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
+  const [menuAnalysis, setMenuAnalysis] = useState<MenuAnalysis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const triggerUpload = () => fileInputRef.current?.click();
@@ -79,9 +80,39 @@ export const LensScreen = () => {
       return;
     }
 
+    const dataUrl = await fileToDataUrl(file);
+    setPreviewUrl(dataUrl);
+    setScanning(true);
+    setShowResult(true);
+
+    if (mode === "menu") {
+      setMenuAnalysis(null);
+      try {
+        const { data, error } = await supabase.functions.invoke("scan-menu", {
+          body: { imageDataUrl: dataUrl },
+        });
+        if (error) {
+          const msg = (error as any)?.context?.error || error.message || "Scan failed";
+          toast.error(typeof msg === "string" ? msg : "Scan failed");
+          setScanning(false);
+          return;
+        }
+        if (data?.error) {
+          toast.error(data.error);
+          setScanning(false);
+          return;
+        }
+        setMenuAnalysis(data.result as MenuAnalysis);
+      } catch (err) {
+        console.error(err);
+        toast.error("Could not analyze menu. Try again.");
+      } finally {
+        setScanning(false);
+      }
+      return;
+    }
+
     try {
-      const dataUrl = await fileToDataUrl(file);
-      setPreviewUrl(dataUrl);
       setAnalysis(null);
       setScanning(true);
       setShowResult(true);

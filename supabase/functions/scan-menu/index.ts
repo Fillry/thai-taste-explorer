@@ -27,20 +27,30 @@ Deno.serve(async (req) => {
     }
 
     const systemPrompt = `คุณคือผู้เชี่ยวชาญด้าน OCR และล่ามอาหารไทย ผู้ใช้ส่งรูปเมนูร้านอาหาร (ส่วนใหญ่เป็นภาษาไทย) มาให้
-อ่านทุกรายการอาหารที่อ่านออก แล้วเรียก tool return_menu_analysis พร้อมข้อมูลแบบ structured
+อ่านทุกรายการอาหารที่อ่านออก แล้ว**ตอบกลับเป็น JSON เท่านั้น** ห้ามมีข้อความอื่นนอก JSON ห้ามใช้ markdown code fence
+
+โครงสร้าง JSON ที่ต้องส่งกลับ:
+{
+  "unclear": boolean,
+  "language": "th" | "en" | "mixed",
+  "dishes": [
+    {
+      "originalText": string,
+      "englishName": string,
+      "thaiName": string,
+      "description": string (1 ประโยคภาษาอังกฤษ),
+      "priceText": string (เช่น "120฿" หรือ ""),
+      "spicinessLevel": number (0-5),
+      "tags": string[] (2-4 คำ เช่น "spicy","seafood","vegetarian","noodles","soup","grilled","rice","dessert"),
+      "imageQuery": string (2-4 คำอังกฤษค้น Unsplash เช่น "tom yum soup")
+    }
+  ]
+}
 
 กฎ:
 - ดึงเมนูได้สูงสุด 20 รายการ ข้ามหัวข้อหมวดหมู่ และเครื่องดื่มที่ไม่ใช่อาหารจานหลัก
-- แต่ละรายการต้องมี:
-  - originalText: ข้อความต้นฉบับตามที่พิมพ์บนเมนู
-  - englishName: ชื่ออังกฤษกระชับ
-  - thaiName: ชื่อไทย (ถ้ามี)
-  - description: คำอธิบายภาษาอังกฤษ 1 ประโยค
-  - priceText: ราคา (เช่น "120฿") หรือ string ว่างถ้าไม่เห็น
-  - spicinessLevel: 0-5
-  - tags: 2-4 คำ (เช่น "spicy","seafood","vegetarian","noodles","soup","grilled","rice","dessert")
-  - imageQuery: 2-4 คำภาษาอังกฤษเหมาะกับค้นรูปบน Unsplash (เช่น "tom yum soup", "pad thai noodles")
-- ถ้ารูปไม่ใช่เมนู หรืออ่านไม่ออกเลย ให้ตั้ง unclear=true และส่ง dishes เป็น array ว่าง`;
+- ถ้ารูปไม่ใช่เมนู หรืออ่านไม่ออกเลย ให้ตั้ง unclear=true และส่ง dishes เป็น array ว่าง
+- ตอบเป็น JSON object เดียวเท่านั้น`;
 
     const response = await fetch(TYPHOON_ENDPOINT, {
       method: "POST",
@@ -55,48 +65,11 @@ Deno.serve(async (req) => {
           {
             role: "user",
             content: [
-              { type: "text", text: "อ่านเมนูในรูปนี้แล้วส่งผลวิเคราะห์แบบ structured" },
+              { type: "text", text: "อ่านเมนูในรูปนี้แล้วตอบกลับเป็น JSON ตามโครงสร้างที่กำหนด" },
               { type: "image_url", image_url: { url: imageDataUrl } },
             ],
           },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_menu_analysis",
-              description: "Return structured analysis of every dish on the menu image.",
-              parameters: {
-                type: "object",
-                properties: {
-                  unclear: { type: "boolean" },
-                  language: { type: "string", description: "Detected primary language, e.g. 'th', 'en', 'mixed'" },
-                  dishes: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        originalText: { type: "string" },
-                        englishName: { type: "string" },
-                        thaiName: { type: "string" },
-                        description: { type: "string" },
-                        priceText: { type: "string" },
-                        spicinessLevel: { type: "number" },
-                        tags: { type: "array", items: { type: "string" } },
-                        imageQuery: { type: "string" },
-                      },
-                      required: ["englishName", "description", "spicinessLevel", "tags", "imageQuery"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["unclear", "language", "dishes"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "return_menu_analysis" } },
         max_tokens: 4096,
         temperature: 0.2,
       }),
@@ -120,19 +93,32 @@ Deno.serve(async (req) => {
     }
 
     const data = await response.json();
-    const argsStr = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (!argsStr) {
-      console.error("No tool call:", JSON.stringify(data));
+    const content: string | undefined = data?.choices?.[0]?.message?.content;
+    if (!content) {
+      console.error("No content in response:", JSON.stringify(data));
       return new Response(JSON.stringify({ error: "ไม่สามารถอ่านผลลัพธ์ AI ได้ กรุณาลองรูปที่ชัดกว่านี้" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // Strip markdown fences if model wraps JSON despite instructions
+    const cleaned = content
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    // Find first { and last } to extract JSON object even if model adds prose
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    const jsonStr = start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned;
+
     let parsed: any;
     try {
-      parsed = JSON.parse(argsStr);
-    } catch {
+      parsed = JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("JSON parse failed. Raw content:", content);
       return new Response(JSON.stringify({ error: "ไม่สามารถอ่านผลลัพธ์ AI ได้ กรุณาลองรูปที่ชัดกว่านี้" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

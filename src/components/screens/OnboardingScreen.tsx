@@ -33,7 +33,7 @@ export const OnboardingScreen = ({ onComplete }: OnboardingProps) => {
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/20 px-3 py-1 text-xs font-medium backdrop-blur">
             <Sparkles className="h-3 w-3" /> AI Profile Setup
           </div>
-          <h1 className="text-3xl font-bold leading-tight">Welcome to your<br />Thai Taste Passport</h1>
+          <h1 className="text-3xl font-bold leading-tight">Welcome to your<br />Thai Taste</h1>
           <p className="mt-2 text-sm text-primary-foreground/80">
             Tell us your taste — we'll guide you to dishes only locals know.
           </p>

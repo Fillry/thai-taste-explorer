@@ -1,8 +1,8 @@
 import { motion } from "framer-motion";
-import { Compass, Sparkles, ScanLine, BookMarked, User, Users } from "lucide-react";
+import { Compass, Sparkles, ScanLine, User, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type TabId = "passport" | "plan" | "lens" | "discover" | "profile" | "community";
+export type TabId = "plan" | "lens" | "discover" | "profile" | "community";
 
 interface BottomNavProps {
   active: TabId;
@@ -14,7 +14,6 @@ const tabs: { id: TabId; label: string; icon: typeof Compass }[] = [
   { id: "discover", label: "Discover", icon: Compass },
   { id: "lens", label: "Lens", icon: ScanLine },
   { id: "community", label: "Community", icon: Users },
-  { id: "passport", label: "Passport", icon: BookMarked },
   { id: "profile", label: "Me", icon: User },
 ];
 

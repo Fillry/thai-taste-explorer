@@ -15,59 +15,71 @@ Deno.serve(async (req) => {
       });
     }
 
-    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-    if (!OPENROUTER_API_KEY) {
-      return new Response(JSON.stringify({ error: "OPENROUTER_API_KEY not configured" }), {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const systemPrompt = `You are a Thai food expert. Analyze the dish in the image and respond ONLY with a strict JSON object (no markdown, no code fences) matching this exact shape:
-{
-  "dishName": string,
-  "thaiName": string,
-  "estimatedCalories": number,
-  "spicinessLevel": number,  // 1-5 integer
-  "allergens": string[],
-  "ingredients": string[],
-  "confidence": number,      // 0-100
-  "description": string      // one short sentence
-}
-If the image is unclear or not food, return: {"error":"unclear_image"}.`;
+    const systemPrompt = `You are a Thai food expert. Analyze the dish in the image and call the return_dish_analysis tool with the structured data. If the image is unclear or not food, set "unclear" to true.`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://lovable.dev",
-        "X-Title": "Thai Taste Passport",
       },
       body: JSON.stringify({
-        model: "google/gemini-flash-1.5-8b",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           {
             role: "user",
             content: [
-              { type: "text", text: "Identify this dish and return the JSON only." },
+              { type: "text", text: "Identify this Thai dish and return structured analysis." },
               { type: "image_url", image_url: { url: imageDataUrl } },
             ],
           },
         ],
-        response_format: { type: "json_object" },
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "return_dish_analysis",
+              description: "Return structured analysis of the dish in the image.",
+              parameters: {
+                type: "object",
+                properties: {
+                  unclear: { type: "boolean", description: "True if image is unclear or not food" },
+                  dishName: { type: "string" },
+                  thaiName: { type: "string" },
+                  estimatedCalories: { type: "number" },
+                  spicinessLevel: { type: "number", description: "1-5 integer" },
+                  allergens: { type: "array", items: { type: "string" } },
+                  ingredients: { type: "array", items: { type: "string" } },
+                  confidence: { type: "number", description: "0-100" },
+                  description: { type: "string", description: "One short sentence" },
+                },
+                required: ["unclear", "dishName", "estimatedCalories", "spicinessLevel", "allergens", "ingredients", "description"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "return_dish_analysis" } },
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("OpenRouter error:", response.status, errText);
+      console.error("AI gateway error:", response.status, errText);
       const friendly =
         response.status === 429
-          ? "The vision model is busy. Please try again in a moment."
+          ? "Too many requests, please try again in a moment."
           : response.status === 402
-          ? "OpenRouter credits exhausted."
+          ? "AI credits exhausted. Add funds in Settings → Workspace → Usage."
           : "Failed to analyze image.";
       return new Response(JSON.stringify({ error: friendly }), {
         status: response.status,
@@ -76,12 +88,20 @@ If the image is unclear or not food, return: {"error":"unclear_image"}.`;
     }
 
     const data = await response.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? "";
+    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
+    const argsStr = toolCall?.function?.arguments;
+
+    if (!argsStr) {
+      console.error("No tool call in response:", JSON.stringify(data));
+      return new Response(
+        JSON.stringify({ error: "Could not parse AI response. Try a clearer photo." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     let parsed: any;
     try {
-      const cleaned = content.replace(/```json|```/g, "").trim();
-      parsed = JSON.parse(cleaned);
+      parsed = JSON.parse(argsStr);
     } catch {
       return new Response(
         JSON.stringify({ error: "Could not parse AI response. Try a clearer photo." }),
@@ -89,7 +109,7 @@ If the image is unclear or not food, return: {"error":"unclear_image"}.`;
       );
     }
 
-    if (parsed?.error === "unclear_image") {
+    if (parsed?.unclear) {
       return new Response(
         JSON.stringify({ error: "Image is unclear or not a recognizable dish. Try again." }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },

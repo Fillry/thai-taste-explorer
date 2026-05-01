@@ -61,15 +61,7 @@ export const LensScreen = () => {
     e.target.value = "";
     if (!file) return;
 
-    if (mode === "menu") {
-      // Keep menu mode as mock for now
-      setScanning(true);
-      setTimeout(() => {
-        setScanning(false);
-        setShowResult(true);
-      }, 1600);
-      return;
-    }
+
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file.");

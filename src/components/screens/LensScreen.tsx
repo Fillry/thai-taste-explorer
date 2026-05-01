@@ -410,3 +410,133 @@ const FoodResultView = ({
     </div>
   );
 };
+
+const MenuResultView = ({
+  scanning,
+  analysis,
+  previewUrl,
+  onRetry,
+}: {
+  scanning: boolean;
+  analysis: MenuAnalysis | null;
+  previewUrl: string | null;
+  onRetry: () => void;
+}) => {
+  if (scanning) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        {previewUrl && (
+          <img src={previewUrl} alt="Uploaded menu" className="mb-5 h-32 w-44 rounded-2xl object-cover shadow-card" />
+        )}
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-3 text-sm font-semibold text-foreground">Reading menu…</p>
+        <p className="mt-1 text-xs text-muted-foreground">OCR + Thai → English translation</p>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <div className="py-10 text-center">
+        <p className="text-sm text-muted-foreground">No menu read yet.</p>
+        <button
+          onClick={onRetry}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Try another photo
+        </button>
+      </div>
+    );
+  }
+
+  const langLabel =
+    analysis.language === "th"
+      ? "TH → EN"
+      : analysis.language === "mixed"
+      ? "Mixed → EN"
+      : (analysis.language || "EN").toUpperCase();
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 rounded-xl bg-secondary/10 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Languages className="h-4 w-4 text-secondary" />
+          <p className="text-xs font-semibold text-secondary">
+            {analysis.dishes.length} dish{analysis.dishes.length === 1 ? "" : "es"} · {langLabel}
+          </p>
+        </div>
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary"
+        >
+          <RefreshCw className="h-3 w-3" /> Rescan
+        </button>
+      </div>
+
+      <ul className="mt-4 space-y-3">
+        {analysis.dishes.map((d, i) => (
+          <MenuDishCard key={`${d.englishName}-${i}`} dish={d} />
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+const MenuDishCard = ({ dish }: { dish: MenuDish }) => {
+  const [imgError, setImgError] = useState(false);
+  const spice = Math.max(0, Math.min(5, Math.round(dish.spicinessLevel || 0)));
+
+  return (
+    <li className="overflow-hidden rounded-2xl bg-muted/50 shadow-sm">
+      <div className="flex gap-3 p-3">
+        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-accent/20">
+          {!imgError ? (
+            <img
+              src={unsplashUrl(dish.imageQuery || dish.englishName)}
+              alt={dish.englishName}
+              loading="lazy"
+              onError={() => setImgError(true)}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <ImageOff className="h-6 w-6" />
+            </div>
+          )}
+          {dish.priceText && (
+            <span className="absolute bottom-1 right-1 rounded-full bg-foreground/80 px-1.5 py-0.5 text-[9px] font-bold text-background">
+              {dish.priceText}
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          {(dish.thaiName || dish.originalText) && (
+            <p className="truncate text-[11px] text-muted-foreground">
+              {dish.thaiName || dish.originalText}
+            </p>
+          )}
+          <h4 className="truncate text-sm font-bold text-foreground">{dish.englishName}</h4>
+          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{dish.description}</p>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {spice > 0 && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                <Flame className="h-2.5 w-2.5" />
+                {Array.from({ length: spice }).map((_, i) => "•").join("")}
+              </span>
+            )}
+            {(dish.tags || []).slice(0, 3).map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-0.5 rounded-full bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              >
+                <Tag className="h-2.5 w-2.5" /> {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+};

@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useRef, useState } from "react";
-import { Camera, FileText, AlertTriangle, Leaf, Languages, Sparkles, Upload, Flame, Activity, Loader2, RefreshCw, ImageOff, Tag } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, FileText, AlertTriangle, Leaf, Languages, Sparkles, Upload, Flame, Activity, Loader2, RefreshCw, ImageOff, Tag, CameraOff } from "lucide-react";
 import { BottomSheet } from "@/components/BottomSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -52,27 +52,55 @@ export const LensScreen = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [menuAnalysis, setMenuAnalysis] = useState<MenuAnalysis | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const triggerUpload = () => fileInputRef.current?.click();
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCameraActive(false);
+  };
 
-
-
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file.");
+  const startCamera = async () => {
+    setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera not supported on this device.");
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error("Image too large (max 8MB).");
-      return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+      // attach after render
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+    } catch (err: any) {
+      console.error(err);
+      const msg = err?.name === "NotAllowedError"
+        ? "Camera permission denied. Use upload instead."
+        : "Couldn't access camera. Use upload instead.";
+      setCameraError(msg);
+      toast.error(msg);
     }
+  };
 
-    const dataUrl = await fileToDataUrl(file);
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
+
+  const processImage = async (dataUrl: string) => {
     setPreviewUrl(dataUrl);
     setScanning(true);
     setShowResult(true);
@@ -106,13 +134,9 @@ export const LensScreen = () => {
 
     try {
       setAnalysis(null);
-      setScanning(true);
-      setShowResult(true);
-
       const { data, error } = await supabase.functions.invoke("scan-food", {
         body: { imageDataUrl: dataUrl },
       });
-
       if (error) {
         const msg = (error as any)?.context?.error || error.message || "Scan failed";
         toast.error(typeof msg === "string" ? msg : "Scan failed");
@@ -131,6 +155,45 @@ export const LensScreen = () => {
       toast.error("Could not analyze image. Try again.");
       setScanning(false);
     }
+  };
+
+  const handleShutter = async () => {
+    if (!cameraActive) {
+      await startCamera();
+      return;
+    }
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) {
+      toast.error("Camera not ready yet.");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    stopCamera();
+    await processImage(dataUrl);
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("Image too large (max 8MB).");
+      return;
+    }
+
+    const dataUrl = await fileToDataUrl(file);
+    await processImage(dataUrl);
   };
 
   const closeSheet = () => {

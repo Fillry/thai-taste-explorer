@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useRef, useState } from "react";
-import { Camera, FileText, AlertTriangle, Leaf, Languages, Sparkles, Upload, Flame, Activity, Loader2, RefreshCw, ImageOff, Tag } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, FileText, AlertTriangle, Leaf, Languages, Sparkles, Upload, Flame, Activity, Loader2, RefreshCw, ImageOff, Tag, CameraOff } from "lucide-react";
 import { BottomSheet } from "@/components/BottomSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -52,27 +52,55 @@ export const LensScreen = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [menuAnalysis, setMenuAnalysis] = useState<MenuAnalysis | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const triggerUpload = () => fileInputRef.current?.click();
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCameraActive(false);
+  };
 
-
-
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file.");
+  const startCamera = async () => {
+    setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera not supported on this device.");
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error("Image too large (max 8MB).");
-      return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+      // attach after render
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+    } catch (err: any) {
+      console.error(err);
+      const msg = err?.name === "NotAllowedError"
+        ? "Camera permission denied. Use upload instead."
+        : "Couldn't access camera. Use upload instead.";
+      setCameraError(msg);
+      toast.error(msg);
     }
+  };
 
-    const dataUrl = await fileToDataUrl(file);
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
+
+  const processImage = async (dataUrl: string) => {
     setPreviewUrl(dataUrl);
     setScanning(true);
     setShowResult(true);
@@ -106,13 +134,9 @@ export const LensScreen = () => {
 
     try {
       setAnalysis(null);
-      setScanning(true);
-      setShowResult(true);
-
       const { data, error } = await supabase.functions.invoke("scan-food", {
         body: { imageDataUrl: dataUrl },
       });
-
       if (error) {
         const msg = (error as any)?.context?.error || error.message || "Scan failed";
         toast.error(typeof msg === "string" ? msg : "Scan failed");
@@ -131,6 +155,45 @@ export const LensScreen = () => {
       toast.error("Could not analyze image. Try again.");
       setScanning(false);
     }
+  };
+
+  const handleShutter = async () => {
+    if (!cameraActive) {
+      await startCamera();
+      return;
+    }
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) {
+      toast.error("Camera not ready yet.");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    stopCamera();
+    await processImage(dataUrl);
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("Image too large (max 8MB).");
+      return;
+    }
+
+    const dataUrl = await fileToDataUrl(file);
+    await processImage(dataUrl);
   };
 
   const closeSheet = () => {
@@ -153,16 +216,34 @@ export const LensScreen = () => {
         className="hidden"
       />
 
-      {/* Mock viewfinder background */}
-      <div
-        className="absolute inset-0 bg-cover bg-center opacity-80"
-        style={{
-          backgroundImage: previewUrl
-            ? `url(${previewUrl})`
-            : "url(https://images.unsplash.com/photo-1559314809-0d155014e29e?w=900&q=80)",
-        }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-accent/60 via-accent/10 to-accent/90" />
+      {/* Live camera background */}
+      {cameraActive && (
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+
+      {/* Static viewfinder background */}
+      {!cameraActive && (
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage: previewUrl
+              ? `url(${previewUrl})`
+              : mode === "menu"
+                ? "url(https://images.unsplash.com/photo-1574936145840-28808d77a0b6?w=900&q=80)"
+                : "url(https://images.unsplash.com/photo-1559314809-0d155014e29e?w=900&q=80)",
+          }}
+        />
+      )}
+
+      {/* Darker overlay for foreground contrast */}
+      <div className="absolute inset-0 bg-gradient-to-b from-accent/85 via-accent/55 to-accent/95" />
+      <div className="absolute inset-0 bg-black/30" />
 
       {/* Header */}
       <header className="relative z-10 px-5 pt-6">
@@ -173,7 +254,7 @@ export const LensScreen = () => {
           {(["food", "menu"] as Mode[]).map((m) => (
             <button
               key={m}
-              onClick={() => setMode(m)}
+              onClick={() => { stopCamera(); setMode(m); }}
               className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-all focus:outline-none ${
                 mode === m
                   ? "bg-primary text-primary-foreground shadow-glow"
@@ -188,7 +269,7 @@ export const LensScreen = () => {
       </header>
 
       {/* Viewfinder frame */}
-      <div className="absolute inset-x-8 top-44 bottom-44 z-10">
+      <div className="absolute inset-x-8 top-44 bottom-44 z-10 pointer-events-none">
         <div className="relative h-full w-full">
           {[
             "top-0 left-0 border-l-4 border-t-4 rounded-tl-2xl",
@@ -224,7 +305,9 @@ export const LensScreen = () => {
               animate={{ opacity: 1 }}
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full glass px-3 py-1.5 text-[11px] font-medium text-foreground"
             >
-              {mode === "food" ? "Upload a photo of the dish" : "Upload a photo of the menu"}
+              {cameraActive
+                ? (mode === "food" ? "Frame the dish & tap shutter" : "Frame the menu & tap shutter")
+                : (mode === "food" ? "Tap shutter to use camera" : "Tap shutter to use camera")}
             </motion.div>
           )}
         </div>
@@ -233,28 +316,58 @@ export const LensScreen = () => {
       {/* Capture button */}
       <div className="absolute inset-x-0 bottom-32 z-10 flex flex-col items-center gap-2">
         <p className="text-[11px] font-medium text-primary-foreground/80">
-          {scanning ? "AI analyzing…" : "Tap to upload & scan"}
+          {scanning
+            ? "AI analyzing…"
+            : cameraActive
+              ? "Tap to capture"
+              : "Tap shutter or upload"}
         </p>
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          onClick={triggerUpload}
-          disabled={scanning}
-          className="relative flex items-center justify-center rounded-full bg-primary-foreground p-1 shadow-glow focus:outline-none focus:ring-4 focus:ring-primary/40 disabled:opacity-70"
-          style={{ height: 72, width: 72 }}
-        >
-          {scanning && (
-            <span className="absolute inset-0 animate-pulse-ring rounded-full bg-primary" />
-          )}
-          <span className="flex h-full w-full items-center justify-center rounded-full gradient-spice">
-            {scanning ? (
-              <Loader2 className="h-7 w-7 animate-spin text-primary-foreground" />
-            ) : (
-              <Upload className="h-7 w-7 text-primary-foreground" />
+
+        <div className="flex items-center gap-5">
+          {/* Upload secondary */}
+          <button
+            onClick={triggerUpload}
+            disabled={scanning}
+            aria-label="Upload from gallery"
+            className="flex h-11 w-11 items-center justify-center rounded-full glass-dark text-primary-foreground shadow-soft active:scale-95 disabled:opacity-50"
+          >
+            <Upload className="h-5 w-5" />
+          </button>
+
+          {/* Shutter */}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleShutter}
+            disabled={scanning}
+            aria-label={cameraActive ? "Capture photo" : "Open camera"}
+            className="relative flex items-center justify-center rounded-full bg-primary-foreground p-1.5 shadow-glow focus:outline-none focus:ring-4 focus:ring-primary/40 disabled:opacity-70"
+            style={{ height: 76, width: 76 }}
+          >
+            {scanning && (
+              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-primary" />
             )}
-          </span>
-        </motion.button>
-        <p className="text-[10px] uppercase tracking-wider text-primary-foreground/60">
-          Powered by Vision AI
+            <span className="flex h-full w-full items-center justify-center rounded-full gradient-spice ring-2 ring-primary-foreground/40">
+              {scanning ? (
+                <Loader2 className="h-7 w-7 animate-spin text-primary-foreground" />
+              ) : (
+                <Camera className="h-7 w-7 text-primary-foreground" />
+              )}
+            </span>
+          </motion.button>
+
+          {/* Stop camera / placeholder */}
+          <button
+            onClick={cameraActive ? stopCamera : startCamera}
+            disabled={scanning}
+            aria-label={cameraActive ? "Stop camera" : "Start camera"}
+            className="flex h-11 w-11 items-center justify-center rounded-full glass-dark text-primary-foreground shadow-soft active:scale-95 disabled:opacity-50"
+          >
+            {cameraActive ? <CameraOff className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
+          </button>
+        </div>
+
+        <p className="text-[10px] uppercase tracking-wider text-primary-foreground/70">
+          {cameraError ? cameraError : "Powered by Vision AI"}
         </p>
       </div>
 

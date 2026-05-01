@@ -10,8 +10,8 @@ interface BottomNavProps {
 }
 
 const tabs: { id: TabId; label: string; icon: typeof Compass }[] = [
-  { id: "plan", label: "Plan", icon: Sparkles },
   { id: "discover", label: "Discover", icon: Compass },
+  { id: "plan", label: "Plan", icon: Sparkles },
   { id: "lens", label: "Lens", icon: ScanLine },
   { id: "community", label: "Community", icon: Users },
   { id: "profile", label: "Me", icon: User },

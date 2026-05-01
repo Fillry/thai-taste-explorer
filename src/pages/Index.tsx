@@ -10,7 +10,12 @@ import { CommunityScreen } from "@/components/screens/CommunityScreen";
 
 const Index = () => {
   const [onboarded, setOnboarded] = useState(false);
-  const [tab, setTab] = useState<TabId>("plan");
+  const [tab, setTab] = useState<TabId>("discover");
+
+  const handleOnboardComplete = () => {
+    setTab("discover");
+    setOnboarded(true);
+  };
 
   const renderTab = () => {
     switch (tab) {
@@ -36,7 +41,7 @@ const Index = () => {
               transition={{ duration: 0.3 }}
               className="h-full"
             >
-              <OnboardingScreen onComplete={() => setOnboarded(true)} />
+              <OnboardingScreen onComplete={handleOnboardComplete} />
             </motion.div>
           ) : (
             <motion.div

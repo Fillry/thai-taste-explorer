@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useRef, useState } from "react";
-import { Camera, FileText, Zap, AlertTriangle, Leaf, Languages, Sparkles, Upload, Flame, Activity, Loader2, RefreshCw } from "lucide-react";
+import { Camera, FileText, AlertTriangle, Leaf, Languages, Sparkles, Upload, Flame, Activity, Loader2, RefreshCw, ImageOff, Tag } from "lucide-react";
 import { BottomSheet } from "@/components/BottomSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -18,11 +18,24 @@ interface FoodAnalysis {
   description?: string;
 }
 
-const menuResult = [
-  { thai: "ต้มยำกุ้ง", eng: "Tom Yum Goong", desc: "Spicy & sour shrimp soup with lemongrass." },
-  { thai: "ส้มตำไทย", eng: "Som Tam Thai", desc: "Green papaya salad with peanuts, lime, dried shrimp." },
-  { thai: "ข้าวผัดปู", eng: "Khao Pad Pu", desc: "Crab fried rice, mild." },
-];
+interface MenuDish {
+  originalText?: string;
+  englishName: string;
+  thaiName?: string;
+  description: string;
+  priceText?: string;
+  spicinessLevel: number;
+  tags: string[];
+  imageQuery: string;
+}
+
+interface MenuAnalysis {
+  language?: string;
+  dishes: MenuDish[];
+}
+
+const unsplashUrl = (query: string) =>
+  `https://source.unsplash.com/featured/400x400/?${encodeURIComponent(query + ",food,thai")}`;
 
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {

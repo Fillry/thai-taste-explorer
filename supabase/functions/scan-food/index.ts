@@ -3,8 +3,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TYPHOON_ENDPOINT = "https://api.opentyphoon.ai/v1/chat/completions";
-const TYPHOON_MODEL = "typhoon-v2-vision";
+const AI_ENDPOINT = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_MODEL = "google/gemini-2.5-flash";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -18,9 +18,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const TYPHOON_API_KEY = Deno.env.get("TYPHOON_API_KEY");
-    if (!TYPHOON_API_KEY) {
-      return new Response(JSON.stringify({ error: "TYPHOON_API_KEY not configured" }), {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -37,14 +37,14 @@ Deno.serve(async (req) => {
 - description เป็นภาษาอังกฤษหนึ่งประโยคสั้นๆ
 - confidence 0-100 ตามความมั่นใจในการระบุชนิดอาหาร`;
 
-    const response = await fetch(TYPHOON_ENDPOINT, {
+    const response = await fetch(AI_ENDPOINT, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${TYPHOON_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: TYPHOON_MODEL,
+        model: AI_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -88,14 +88,12 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Typhoon API error:", response.status, errText);
+      console.error("AI gateway error:", response.status, errText);
       const friendly =
         response.status === 429
           ? "ส่งคำขอถี่เกินไป กรุณาลองใหม่อีกสักครู่"
-          : response.status === 401
-          ? "Typhoon API key ไม่ถูกต้องหรือหมดอายุ"
           : response.status === 402
-          ? "Typhoon credit หมด กรุณาเติมที่ playground.opentyphoon.ai"
+          ? "AI credit หมด กรุณาเติมที่ Settings → Workspace → Usage"
           : "วิเคราะห์รูปไม่สำเร็จ กรุณาลองใหม่";
       return new Response(JSON.stringify({ error: friendly }), {
         status: response.status,

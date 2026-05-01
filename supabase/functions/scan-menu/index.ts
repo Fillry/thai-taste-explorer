@@ -4,7 +4,7 @@ const corsHeaders = {
 };
 
 const TYPHOON_ENDPOINT = "https://api.opentyphoon.ai/v1/chat/completions";
-const TYPHOON_MODEL = "typhoon-v2-vision";
+const TYPHOON_MODEL = "typhoon-ocr-v1.5";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

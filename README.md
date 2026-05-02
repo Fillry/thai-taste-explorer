@@ -1,3 +1,5 @@
-# Welcome to your Lovable project
+# Thai Taste
+Taste Thai Food Safely. Discover Locally. Recreate Tastes You'll Miss.
+https://thai-taste.vercel.app/
 
-TODO: Document your project here
+
